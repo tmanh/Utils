@@ -9,7 +9,7 @@ from sklearn.metrics import confusion_matrix
 def plot_confusion_matrix(cm, classes,
                           normalize=False,
                           title='Confusion matrix',
-                          cmap=plt.cm.Blues,
+                          cmap=plt.cm.Greens,
                           nticks=6):
     """
     This function prints and plots the confusion matrix.
@@ -59,19 +59,21 @@ if __name__ == "__main__":
               0, 0, 0, 1, 1, 1, 2, 2, 2, 4, 4, 4, 4,
               3, 3, 3, 5, 5, 5, 6, 6, 6, 7, 7, 7, 8, 8, 8, 9, 9, 9]
 
-    output = [3, 0, 0, 1, 1, 1, 2, 2, 2, 9, 4, 4, 4,
-              3, 3, 3, 5, 5, 5, 9, 9, 9, 0, 3, 3, 8, 9, 9, 9, 9, 9,
-              8, 0, 6, 1, 1, 1, 2, 2, 2, 4, 4, 4, 4,
-              3, 6, 4, 0, 5, 5, 6, 6, 4, 1, 7, 1, 8, 8, 8, 9, 4, 6,
-              0, 0, 0, 1, 1, 1, 5, 5, 4, 4, 4, 4, 4,
-              1, 1, 0, 5, 5, 0, 0, 8, 0, 8, 0, 0, 8, 8, 8, 0, 0, 0,
-              0, 0, 6, 7, 7, 7, 5, 5, 8, 9, 4, 4, 4,
-              0, 0, 0, 0, 0, 5, 4, 6, 9, 7, 7, 7, 8, 4, 7, 9, 9, 9]
+    output = [8, 0, 7, 1, 7, 7, 2, 2, 2, 4, 4, 4, 4,
+              9, 9, 9, 5, 5, 0, 9, 9, 8, 3, 7, 3, 8, 8, 8, 9, 9, 9,
+              0, 0, 0, 1, 1, 1, 2, 2, 2, 8, 4, 4, 8,
+              3, 3, 3, 5, 5, 5, 4, 6, 4, 3, 1, 3, 8, 8, 8, 9, 8, 4,
+              0, 0, 8, 1, 1, 1, 2, 4, 2, 4, 4, 4, 4,
+              1, 1, 1, 5, 2, 5, 6, 4, 6, 5, 3, 6, 4, 4, 8, 6, 4, 6,
+              0, 0, 0, 1, 7, 7, 2, 2, 8, 9, 4, 4, 4,
+              3, 3, 3, 5, 5, 5, 9, 9, 9, 7, 7, 7, 8, 9, 9, 9, 9, 9]
 
     classes = ["arranging_objects", "cleaning_objects", "having_meal",
                "microwaving_food", "making_cereal", "picking_objects",
                "stacking_objects", "taking_food", "taking_medicine",
                "unstacking_objects"]
+
+    print np.mean(np.array(target) == np.array(output))
 
     cfs_mat = confusion_matrix(target, output)
 
