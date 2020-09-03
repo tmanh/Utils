@@ -66,6 +66,13 @@ def inside_triangle(x1, x2, x3, y1, y2, y3):
     ys = np.ones(3, dtype=np.float32)
     create_list_coordinates(x1, x2, x3, y1, y2, y3, xs, ys)
 
+    xc = np.mean(xs)
+    yc = np.mean(ys)
+
+    for i in range(3):
+        if int(xc) == int(xs[i]) and int(yc) == int(ys[i]):
+            return np.zeros(0, dtype=np.int32), np.zeros(0, dtype=np.int32)
+
     # The possible range of coordinates that can be returned
     len_x = int(int(np.max(xs) + 1) - int(np.min(xs)))
     x_range = np.zeros(len_x, dtype=np.int32)
@@ -80,8 +87,6 @@ def inside_triangle(x1, x2, x3, y1, y2, y3):
     # Set the grid of coordinates on which the triangle lies. The centre of the
     # triangle serves as a criterion for what is inside or outside the triangle.
     meshgrid(x_range, y_range, X, Y)
-    xc = np.mean(xs)
-    yc = np.mean(ys)
 
     # From the array 'triangle', points that lie outside the triangle will be
     # set to 'False'.
