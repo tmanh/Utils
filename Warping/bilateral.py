@@ -1,4 +1,7 @@
 import numpy as np
+
+from numba import jit
+from utils import meshgrid_float
 from functools import reduce
 
 #######################################################################################################################
@@ -6,13 +9,20 @@ from functools import reduce
 #######################################################################################################################
 
 
+@jit('int32(int32)')
 def get_window_size(idx):
     return [7, 7, 5, 5, 5][idx]
 
 
+@jit('(int32, float32)')
 def compute_spatial_kernel(mid_point, sigma_s):
     ax = np.arange(-mid_point, mid_point + 1.)
-    xx, yy = np.meshgrid(ax, ax)
+
+    len_ax = len(ax)
+    xx = np.zeros((len_ax, len_ax), dtype=np.int32)
+    yy = np.zeros((len_ax, len_ax), dtype=np.int32)
+    meshgrid_float(ax, ax, xx, yy)
+
     spatial_term = np.exp(-(xx ** 2 + yy ** 2) / (2. * sigma_s ** 2))
 
     return spatial_term

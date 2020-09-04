@@ -1,7 +1,7 @@
 import numpy as np
 import numba as nb
 
-from utils import round
+from utils import round, meshgrid
 from numba import jit
 
 
@@ -19,14 +19,6 @@ def create_list_coordinates(x1, x2, x3, y1, y2, y3, xs, ys):
 def arange(min_value, max_value, output):
     for i in range(min_value, max_value + 1):
         output[i - min_value] = i
-
-
-@jit('void(int32[:],int32[:],int32[:,:],int32[:,:])')
-def meshgrid(x_range, y_range, X, Y):
-    for i in range(len(x_range)):
-        for j in range(len(y_range)):
-            X[j, i] = x_range[i]
-            Y[j, i] = y_range[j]
 
 
 @jit('float32(float32,float32,int32)')
@@ -73,13 +65,18 @@ def inside_triangle(x1, x2, x3, y1, y2, y3):
         if int(xc) == int(xs[i]) and int(yc) == int(ys[i]):
             return xs.astype(np.int32), ys.astype(np.int32)
 
+    max_xs_plus = int(np.max(xs) + 1)
+    max_ys_plus = int(np.max(ys) + 1)
+    min_xs = int(np.min(xs))
+    min_ys = int(np.min(ys))
+
     # The possible range of coordinates that can be returned
-    len_x = int(int(np.max(xs) + 1) - int(np.min(xs)))
+    len_x = max_xs_plus - min_xs
     x_range = np.zeros(len_x, dtype=np.int32)
-    arange(int(np.min(xs)), int(np.max(xs) + 1), x_range)
-    len_y = int(int(np.max(ys) + 1) - int(np.min(ys)))
+    arange(min_xs, max_xs_plus, x_range)
+    len_y = max_ys_plus - min_ys
     y_range = np.zeros(len_y, dtype=np.int32)
-    arange(int(np.min(ys)), int(np.max(ys) + 1), y_range)
+    arange(min_ys, max_ys_plus, y_range)
 
     X = np.zeros((len_y, len_x), dtype=np.int32)
     Y = np.zeros((len_y, len_x), dtype=np.int32)
