@@ -2,6 +2,12 @@ import numpy as np
 from numba import jit
 
 
+def quatization(depth):
+    div = 32
+    quantized = depth // div * div + div // 2
+    return quantized, [i * div + div // 2 for i in range(255 // div)]
+
+
 @jit('int32(float32)')
 def round(x):
     if x - np.int32(x) > 0.5:

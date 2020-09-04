@@ -1,9 +1,10 @@
 import numpy as np
+from numba import jit, cuda
 
+from bilateral import sparse_bilateral_filtering
 from triangle import inside_triangle
 from matmul import fast_matmul, matmul_fff, matmul_fif
 from utils import round
-from numba import jit, cuda
 
 
 @jit('int32[:,:](int64[:],int64[:],int64,int64)')
@@ -145,18 +146,22 @@ def warp_cpu(triangles, warped_locs, depth, new_depth, iter_num, height, width):
                     new_depth[y, x] = round(d)
 
 
-@cuda.jit
-def warp_gpu(triangles, depth, src_pose, dst_pose):
-    nbins = histogram_out.shape[0]
-    bin_width = (xmax - xmin) / nbins
+def warp(image, depth, src_pose, dst_pose, num_iter=5):
+    vis_photos, bilateral = sparse_bilateral_filtering(depth, image, num_iter=num_iter)
+    bilateral = bilateral[-1]
 
-    start = cuda.grid(1)
-    stride = cuda.gridsize(1)
+    norm_bilateral = (bilateral - bilateral.min()) / (bilateral.max() - bilateral.min())
+    xxx = bilateral / bilateral.max()
 
-    for i in range(start, x.shape[0], stride):
-        # note that calling a numba.jit function from CUDA automatically
-        # compiles an equivalent CUDA device function!
-        bin_number = compute_bin(x[i], nbins, xmin, xmax)
+    horizon_check = (abs(norm_bilateral - np.roll(norm_bilateral, 1, 0)) > 0.03).astype(np.uint8) * 255
+    vertical_check = (abs(norm_bilateral - np.roll(norm_bilateral, 1, 1)) > 0.03).astype(np.uint8) * 255
+    check = np.maximum(horizon_check, vertical_check)
 
-        if bin_number >= 0 and bin_number < histogram_out.shape[0]:
-            cuda.atomic.add(histogram_out, bin_number, 1)
+    triangles = generate_triangles(check)
+    
+    new_depth = np.zeros(depth.shape, dtype=np.float32)
+    pos_matrix = create_loc_matrix_from_depth(depth, depth.shape[0], depth.shape[1])
+    warped_locs = pre_warp(pos_matrix, np.linalg.inv(src_pose), dst_pose, depth.shape[0], depth.shape[1])
+    warp_cpu(triangles, warped_locs, depth.astype(np.float32), new_depth, triangles.shape[0], depth.shape[0], depth.shape[1])
+
+    return new_depth, check
