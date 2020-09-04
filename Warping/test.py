@@ -14,8 +14,10 @@ def quatization(depth):
 
 
 def main():
+    start_time = time.time()
     image = cv2.imread('./view1.png')
     depth = cv2.imread('./disp1.png', 0)
+    print("--- loading: %s seconds ---" % (time.time() - start_time))
     depth = 255 - depth
     start_time = time.time()
     vis_photos, bilateral = sparse_bilateral_filtering(depth, image, num_iter=5)

@@ -107,26 +107,30 @@ def pre_warp(pos_matrix, inv_src_pose, dst_pose, height, width):
 
 @jit('void(int32[:,:],float32[:,:,:],float32[:,:],float32[:,:],int64,int64,int64)')
 def warp_cpu(triangles, warped_locs, depth, new_depth, iter_num, height, width):
+    warped_locs[0, :] = warped_locs[0, :] / warped_locs[2, :]
+    warped_locs[1, :] = warped_locs[1, :] / warped_locs[2, :]
     for i in range(iter_num):
         warped_loc = np.zeros((4, 3), dtype=np.float32)
         for j in range(3):
             warped_loc[:, j] = warped_locs[:, triangles[i, j * 2], triangles[i, j * 2 + 1]]
 
-        X_out, Y_out = inside_triangle(
-            warped_loc[0, 0] / warped_loc[2, 0],
-            warped_loc[0, 1] / warped_loc[2, 1],
-            warped_loc[0, 2] / warped_loc[2, 2],
-            warped_loc[1, 0] / warped_loc[2, 0],
-            warped_loc[1, 1] / warped_loc[2, 1],
-            warped_loc[1, 2] / warped_loc[2, 2])
+        for j in range(3):
+            x = int(warped_loc[0, j])
+            y = int(warped_loc[1, j])
+            if 0 <= x and x < width and 0 <= y and y < height:
+                if new_depth[y, x] > warped_loc[2, j] or new_depth[y, x] == 0:
+                    new_depth[y, x] = warped_loc[2, j]
+
+        X_out, Y_out = inside_triangle(warped_loc[0, 0], warped_loc[0, 1], warped_loc[0, 2],
+            warped_loc[1, 0], warped_loc[1, 1], warped_loc[1, 2])
 
         for j in range(len(X_out)):
             x = X_out[j]
             y = Y_out[j]
             
-            dis1 = 1 / (abs(x - warped_loc[0, 0] / warped_loc[2, 0]) + abs(y - warped_loc[1, 0] / warped_loc[2, 0]) + 1e-7)
-            dis2 = 1 / (abs(x - warped_loc[0, 1] / warped_loc[2, 1]) + abs(y - warped_loc[1, 1] / warped_loc[2, 1]) + 1e-7)
-            dis3 = 1 / (abs(x - warped_loc[0, 2] / warped_loc[2, 2]) + abs(y - warped_loc[1, 2] / warped_loc[2, 2]) + 1e-7)
+            dis1 = abs(x - warped_loc[0, 0]) + abs(y - warped_loc[1, 0])
+            dis2 = abs(x - warped_loc[0, 1]) + abs(y - warped_loc[1, 1])
+            dis3 = abs(x - warped_loc[0, 2]) + abs(y - warped_loc[1, 2])
             
             d1 = warped_loc[2, 0]
             d2 = warped_loc[2, 1]
@@ -134,7 +138,7 @@ def warp_cpu(triangles, warped_locs, depth, new_depth, iter_num, height, width):
             
             dis_t = dis1 + dis2 + dis3
             
-            d = d1 * (1 - dis1 / dis_t) + d2 * (1 - dis2 / dis_t) + d3 * (1 - dis3 / dis_t)
+            d = d1 * dis1 / dis_t + d2 * dis2 / dis_t + d3 * dis3 / dis_t
             
             if 0 <= x and x < width and 0 <= y and y < height:
                 if new_depth[y, x] > d or new_depth[y, x] == 0:

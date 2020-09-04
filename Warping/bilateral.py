@@ -14,7 +14,7 @@ def get_window_size(idx):
     return [7, 7, 5, 5, 5][idx]
 
 
-@jit('(int32, float32)')
+@jit('float32[:,:](int32, float32)')
 def compute_spatial_kernel(mid_point, sigma_s):
     ax = np.arange(-mid_point, mid_point + 1.)
 
@@ -25,7 +25,7 @@ def compute_spatial_kernel(mid_point, sigma_s):
 
     spatial_term = np.exp(-(xx ** 2 + yy ** 2) / (2. * sigma_s ** 2))
 
-    return spatial_term
+    return spatial_term.astype(np.float32)
 
 
 def padding(depth, mid_point):
@@ -63,67 +63,141 @@ def bilateral_filter(depth, discontinuity_map=None, mask=None, window_size=False
         pad_mask_patches = rolling_window(pad_mask, [window_size, window_size], [1, 1])
 
     if discontinuity_map is not None:
-        p_h, p_w = pad_depth_patches.shape[:2]
-        for pi in range(p_h):
-            for pj in range(p_w):
-                if mask is not None and mask[pi, pj] == 0:
-                    continue
-                if discontinuity_map is not None:
-                    if bool(pad_discontinuity_patches[pi, pj].any()) is False:
-                        continue
-                    discontinuity_holes = pad_discontinuity_hole_patches[pi, pj]
-
-                depth_patch = pad_depth_patches[pi, pj]
-                depth_order = depth_patch.ravel().argsort()
-                patch_midpt = depth_patch[window_size // 2, window_size // 2]
-                if discontinuity_map is not None:
-                    coef = discontinuity_holes.astype(np.float32)
-                    if mask is not None:
-                        coef = coef * pad_mask_patches[pi, pj]
-                else:
-                    range_term = np.exp(-(depth_patch - patch_midpt) ** 2 / (2. * sigma_r ** 2))
-                    coef = spatial_term * range_term
-                if coef.max() == 0:
-                    output[pi, pj] = patch_midpt
-                    continue
-                if discontinuity_map is not None and (coef.max() == 0):
-                    output[pi, pj] = patch_midpt
-                else:
-                    coef = coef / (coef.sum())
-                    coef_order = coef.ravel()[depth_order]
-                    cum_coef = np.cumsum(coef_order)
-                    ind = np.digitize(0.5, cum_coef)
-                    output[pi, pj] = depth_patch.ravel()[depth_order][ind]
+        if mask is None:
+            if pad_discontinuity_hole_patches is None:
+                _bilateral_filter_1(output, pad_depth_patches, np.zeros((0, 0), dtype=np.uint8), discontinuity_map,
+                                    pad_discontinuity_patches, np.zeros((0, 0, 0, 0), dtype=np.float32), window_size,
+                                    np.zeros((0, 0), dtype=np.float32), sigma_s, sigma_r, spatial_term)
+            else:
+                _bilateral_filter_1(output, pad_depth_patches, np.zeros((0, 0), dtype=np.uint8), discontinuity_map,
+                                    pad_discontinuity_patches, pad_discontinuity_hole_patches, window_size,
+                                    np.zeros((0, 0), dtype=np.float32), sigma_s, sigma_r, spatial_term)
+        else:
+            if pad_discontinuity_hole_patches is None:
+                _bilateral_filter_1(output, pad_depth_patches, mask, discontinuity_map, pad_discontinuity_patches,
+                                    np.zeros((0, 0, 0, 0), dtype=np.float32), window_size, pad_mask_patches, sigma_s, sigma_r,
+                                    spatial_term)
+            else:
+                _bilateral_filter_1(output, pad_depth_patches, mask, discontinuity_map, pad_discontinuity_patches,
+                                    pad_discontinuity_hole_patches, window_size, pad_mask_patches, sigma_s, sigma_r,
+                                    spatial_term)
     else:
-        p_h, p_w = pad_depth_patches.shape[:2]
-        for pi in range(p_h):
-            for pj in range(p_w):
-                if discontinuity_map is not None:
-                    if pad_discontinuity_patches[pi, pj][window_size // 2, window_size // 2] == 1:
-                        continue
-                    discontinuity_patch = pad_discontinuity_patches[pi, pj]
-                    discontinuity_holes = (1. - discontinuity_patch)
-                depth_patch = pad_depth_patches[pi, pj]
-                depth_order = depth_patch.ravel().argsort()
-                patch_midpt = depth_patch[window_size // 2, window_size // 2]
-                range_term = np.exp(-(depth_patch - patch_midpt) ** 2 / (2. * sigma_r ** 2))
-                if discontinuity_map is not None:
-                    coef = spatial_term * range_term * discontinuity_holes
-                else:
-                    coef = spatial_term * range_term
-                if coef.sum() == 0:
-                    output[pi, pj] = patch_midpt
-                    continue
-                if discontinuity_map is not None and (coef.sum() == 0):
-                    output[pi, pj] = patch_midpt
-                else:
-                    coef = coef / (coef.sum())
-                    coef_order = coef.ravel()[depth_order]
-                    cum_coef = np.cumsum(coef_order)
-                    ind = np.digitize(0.5, cum_coef)
-                    output[pi, pj] = depth_patch.ravel()[depth_order][ind]
+        if mask is None:
+            if pad_discontinuity_hole_patches is None:
+                _bilateral_filter_2(output, pad_depth_patches, np.zeros((0, 0), dtype=np.uint8), discontinuity_map,
+                                    pad_discontinuity_patches, np.zeros((0, 0, 0, 0), dtype=np.float32), window_size,
+                                    np.zeros((0, 0), dtype=np.float32), sigma_s, sigma_r, spatial_term)
+            else:
+                _bilateral_filter_2(output, pad_depth_patches, np.zeros((0, 0), dtype=np.uint8), discontinuity_map,
+                                    pad_discontinuity_patches, pad_discontinuity_hole_patches, window_size,
+                                    np.zeros((0, 0), dtype=np.float32), sigma_s, sigma_r, spatial_term)
+        else:
+            if pad_discontinuity_hole_patches is None:
+                _bilateral_filter_2(output, pad_depth_patches, mask, discontinuity_map, pad_discontinuity_patches,
+                                    np.zeros((0, 0, 0, 0), dtype=np.float32), window_size, pad_mask_patches, sigma_s, sigma_r,
+                                    spatial_term)
+            else:
+                _bilateral_filter_2(output, pad_depth_patches, mask, discontinuity_map, pad_discontinuity_patches,
+                                    pad_discontinuity_hole_patches, window_size, pad_mask_patches, sigma_s, sigma_r,
+                                    spatial_term)
 
     return output
+
+
+@jit('void(uint8[:,:],uint8[:,:,:,:],uint8[:,:],float32[:,:],float32[:,:,:,:],float32[:,:,:,:],int64,float32[:,:],float64,float64,float32[:,:])')
+def _bilateral_filter_1(output, pad_depth_patches, mask, discontinuity_map, pad_discontinuity_patches, pad_discontinuity_hole_patches,
+                        window_size, pad_mask_patches, sigma_s, sigma_r, spatial_term):
+    p_h, p_w = pad_depth_patches.shape[:2]
+    for pi in range(p_h):
+        for pj in range(p_w):
+            if len(mask) != 0 and mask[pi, pj] == 0:
+                continue
+            if discontinuity_map is not None:
+                if bool(pad_discontinuity_patches[pi, pj].any()) is False:
+                    continue
+                discontinuity_holes = pad_discontinuity_hole_patches[pi, pj]
+
+            depth_patch = pad_depth_patches[pi, pj]
+            depth_order = depth_patch.ravel().argsort()
+            patch_midpt = depth_patch[window_size // 2, window_size // 2]
+            
+            if discontinuity_map is not None:
+                coef = discontinuity_holes
+                if len(mask) != 0:
+                    coef = coef * pad_mask_patches[pi, pj]
+            else:
+                range_term = np.exp(-(depth_patch - patch_midpt) ** 2 / (2. * sigma_r ** 2))
+                coef = (spatial_term * range_term).astype(np.float32)
+
+            if np.max(coef) == 0:
+                output[pi, pj] = patch_midpt
+                continue
+
+            if discontinuity_map is not None and (coef.max() == 0):
+                output[pi, pj] = patch_midpt
+            else:
+                coef = coef / (coef.sum())
+                coef_order = coef.ravel()[depth_order]
+                cum_coef = np.cumsum(coef_order)
+
+                value = 0.5
+                if value < cum_coef[0]:
+                    ind = 0
+
+                if value >= cum_coef[len(cum_coef) - 1]:
+                    ind = cum_coef.shape[0]
+
+                for x in range(1, len(cum_coef)):
+                    if value >= cum_coef[x - 1] and value < cum_coef[x]:
+                        ind = x
+
+                output[pi, pj] = depth_patch.ravel()[depth_order][ind]
+
+
+@jit('void(uint8[:,:],uint8[:,:,:,:],uint8[:,:],float32[:,:],float32[:,:,:,:],float32[:,:,:,:],int64,float32[:,:],float64,float64,float32[:,:])')
+def _bilateral_filter_2(output, pad_depth_patches, mask, discontinuity_map, pad_discontinuity_patches, pad_discontinuity_hole_patches,
+                        window_size, pad_mask_patches, sigma_s, sigma_r, spatial_term):
+    p_h, p_w = pad_depth_patches.shape[:2]
+    for pi in range(p_h):
+        for pj in range(p_w):
+            if discontinuity_map is not None:
+                if pad_discontinuity_patches[pi, pj][window_size // 2, window_size // 2] == 1:
+                    continue
+                discontinuity_patch = pad_discontinuity_patches[pi, pj]
+                discontinuity_holes = (1. - discontinuity_patch)
+            depth_patch = pad_depth_patches[pi, pj]
+            depth_order = depth_patch.ravel().argsort()
+            patch_midpt = depth_patch[window_size // 2, window_size // 2]
+            range_term = np.exp(-(depth_patch - patch_midpt) ** 2 / (2. * sigma_r ** 2))
+                
+            if discontinuity_map is not None:
+                coef = spatial_term * range_term * discontinuity_holes
+            else:
+                coef = spatial_term * range_term
+                
+            if coef.sum() == 0:
+                output[pi, pj] = patch_midpt
+                continue
+
+            if discontinuity_map is not None and (coef.sum() == 0):
+                output[pi, pj] = patch_midpt
+            else:
+                coef = coef / (coef.sum())
+                coef_order = coef.ravel()[depth_order]
+                cum_coef = np.cumsum(coef_order)
+
+                value = 0.5
+                if value < cum_coef[0]:
+                    ind = 0
+
+                if value >= cum_coef[len(cum_coef) - 1]:
+                    ind = cum_coef.shape[0]
+
+                for x in range(1, len(cum_coef)):
+                    if value >= cum_coef[x - 1] and value < cum_coef[x]:
+                        ind = x
+
+                output[pi, pj] = depth_patch.ravel()[depth_order][ind]
 
 
 def shape_fn(a, i, w, s):
