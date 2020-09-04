@@ -17,7 +17,7 @@ def main():
     image = cv2.imread('./view1.png')
     depth = cv2.imread('./disp1.png', 0)
     depth = 255 - depth
-
+    start_time = time.time()
     vis_photos, bilateral = sparse_bilateral_filtering(depth, image, num_iter=5)
     bilateral = bilateral[-1]
     xxxx = (bilateral - bilateral.min()) / (bilateral.max() - bilateral.min())
@@ -35,7 +35,7 @@ def main():
                          [0, 1, 0, 0],
                          [0, 0, 1, 0],
                          [0, 0, 0, 1]], dtype=np.float32)  
-    
+    print("--- preprocess: %s seconds ---" % (time.time() - start_time))
     start_time = time.time()
     triangles = generate_triangles(check)
     print("--- generate_triangles: %s seconds ---" % (time.time() - start_time))

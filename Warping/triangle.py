@@ -71,7 +71,7 @@ def inside_triangle(x1, x2, x3, y1, y2, y3):
 
     for i in range(3):
         if int(xc) == int(xs[i]) and int(yc) == int(ys[i]):
-            return np.zeros(0, dtype=np.int32), np.zeros(0, dtype=np.int32)
+            return xs.astype(np.int32), ys.astype(np.int32)
 
     # The possible range of coordinates that can be returned
     len_x = int(int(np.max(xs) + 1) - int(np.min(xs)))
