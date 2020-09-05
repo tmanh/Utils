@@ -1,5 +1,6 @@
+import cv2
 import numpy as np
-from numba import jit, cuda
+from numba import jit
 
 from bilateral import sparse_bilateral_filtering
 from triangle import inside_triangle
@@ -106,8 +107,8 @@ def pre_warp(pos_matrix, inv_src_pose, dst_pose, height, width):
     return (warped_locs.reshape((4 , height, width)) + 1e-7).astype(np.float32)
 
 
-@jit('void(int32[:,:],float32[:,:,:],float32[:,:],float32[:,:],int64,int64,int64)')
-def warp_cpu(triangles, warped_locs, depth, new_depth, iter_num, height, width):
+@jit('void(int32[:,:],float32[:,:,:],float32[:,:],uint8[:,:,:],float32[:,:],uint8[:,:,:],int64,int64,int64)')
+def warp_cpu(triangles, warped_locs, depth, image, new_depth, new_image, iter_num, height, width):
     warped_locs[0, :] = warped_locs[0, :] / warped_locs[2, :]
     warped_locs[1, :] = warped_locs[1, :] / warped_locs[2, :]
     for i in range(iter_num):
@@ -121,6 +122,7 @@ def warp_cpu(triangles, warped_locs, depth, new_depth, iter_num, height, width):
             if 0 <= x and x < width and 0 <= y and y < height:
                 if new_depth[y, x] > warped_loc[2, j] or new_depth[y, x] == 0:
                     new_depth[y, x] = warped_loc[2, j]
+                    new_image[y, x] = image[triangles[i, j * 2], triangles[i, j * 2 + 1]]
 
         X_out, Y_out = inside_triangle(warped_loc[0, 0], warped_loc[0, 1], warped_loc[0, 2],
             warped_loc[1, 0], warped_loc[1, 1], warped_loc[1, 2])
@@ -136,14 +138,20 @@ def warp_cpu(triangles, warped_locs, depth, new_depth, iter_num, height, width):
             d1 = warped_loc[2, 0]
             d2 = warped_loc[2, 1]
             d3 = warped_loc[2, 2]
+
+            c1 = image[triangles[i, 0], triangles[i, 1]]
+            c2 = image[triangles[i, 2], triangles[i, 3]]
+            c3 = image[triangles[i, 4], triangles[i, 5]]
             
             dis_t = dis1 + dis2 + dis3
             
             d = d1 * dis1 / dis_t + d2 * dis2 / dis_t + d3 * dis3 / dis_t
+            c = c1 * dis1 / dis_t + c2 * dis2 / dis_t + c3 * dis3 / dis_t
             
             if 0 <= x and x < width and 0 <= y and y < height:
                 if new_depth[y, x] > d or new_depth[y, x] == 0:
                     new_depth[y, x] = round(d)
+                    new_image[y, x] = c.astype(np.uint8)
 
 
 def warp(image, depth, src_pose, dst_pose, num_iter=5):
@@ -151,7 +159,6 @@ def warp(image, depth, src_pose, dst_pose, num_iter=5):
     bilateral = bilateral[-1]
 
     norm_bilateral = (bilateral - bilateral.min()) / (bilateral.max() - bilateral.min())
-    xxx = bilateral / bilateral.max()
 
     horizon_check = (abs(norm_bilateral - np.roll(norm_bilateral, 1, 0)) > 0.03).astype(np.uint8) * 255
     vertical_check = (abs(norm_bilateral - np.roll(norm_bilateral, 1, 1)) > 0.03).astype(np.uint8) * 255
@@ -160,8 +167,17 @@ def warp(image, depth, src_pose, dst_pose, num_iter=5):
     triangles = generate_triangles(check)
     
     new_depth = np.zeros(depth.shape, dtype=np.float32)
+    new_image = np.zeros(image.shape, dtype=np.uint8)
+
     pos_matrix = create_loc_matrix_from_depth(depth, depth.shape[0], depth.shape[1])
     warped_locs = pre_warp(pos_matrix, np.linalg.inv(src_pose), dst_pose, depth.shape[0], depth.shape[1])
-    warp_cpu(triangles, warped_locs, depth.astype(np.float32), new_depth, triangles.shape[0], depth.shape[0], depth.shape[1])
+    warp_cpu(triangles, warped_locs, depth.astype(np.float32), image,
+             new_depth, new_image, triangles.shape[0], depth.shape[0], depth.shape[1])
 
-    return new_depth, check
+    return new_depth, new_image, check
+
+
+def connected_components(check):
+    num, labels = cv2.connectedComponents(check, connectivity=4)
+
+    # loop to create multi-layer map
